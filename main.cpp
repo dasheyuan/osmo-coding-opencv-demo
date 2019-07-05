@@ -3,12 +3,14 @@
 
 #include "opencv2/opencv.hpp"
 #include "Mission.h"
+#include "CTime.h"
 
 
 using namespace std;
 using namespace cv;
 
 int main(int, char **) {
+    CTime ct;
     Mat frame;
     //--- INITIALIZE VIDEOCAPTURE
     VideoCapture cap;
@@ -24,7 +26,8 @@ int main(int, char **) {
         cerr << "ERROR! Unable to open camera\n";
         return -1;
     }
-
+    cap.set(CV_CAP_PROP_FRAME_HEIGHT, 240);
+    cap.set(CV_CAP_PROP_FRAME_WIDTH, 320);
     //--- GRAB AND WRITE LOOP
     cout << "Start grabbing" << endl
          << "Press any key to terminate" << endl;
@@ -38,7 +41,12 @@ int main(int, char **) {
         }
         // show live and wait for a key with timeout long enough to show images
         imshow("Live", frame);
-        Mission::getInstance().commandRecognize(frame);
+        ct.restart();
+        std::string result = Mission::getInstance().commandRecognize(frame);
+        if (result != "null") {
+            PRINT("%d ms\n", ct.restart());
+            std::cout << result << endl;
+        }
         if (waitKey(30) == 27)
             break;
     }

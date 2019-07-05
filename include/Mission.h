@@ -10,12 +10,12 @@
 
 #include "opencv2/opencv.hpp"
 #include "Command.h"
-
+#include "CTime.h"
 
 #define PRINT(x, arg...) do{ \
                                 char buff[20];struct tm *sTm;time_t now = time (0);sTm = gmtime (&now);\
                                 strftime (buff, sizeof(buff), "%Y-%m-%d %H:%M:%S", sTm);\
-                                if(true) \
+                                if(false) \
                                     fprintf(stdout,"[DEBUG %s ]" x,buff,##arg); \
                             }while(0)
 
@@ -40,7 +40,7 @@ public:
 
 public:
 
-    void commandRecognize(const cv::Mat &in);
+    std::string commandRecognize(const cv::Mat &in);
 
     void addCommand(const Command &command);
 
@@ -75,6 +75,7 @@ private:
             90, 255,
             0, 200
     };
+    CTime ct_;
 
 
     void bgr2hsv(const cv::Mat &input, cv::Mat &out, int value[6], bool bit_not) {

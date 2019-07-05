@@ -4,6 +4,7 @@
 
 #include "Mission.h"
 
+
 Mission::Mission() {
     std::string path = "../template/";
     Mat num1 = imread(path + "1.bmp");
@@ -24,6 +25,8 @@ Mission::Mission() {
     Mat pick = imread(path + "PICK.bmp");
     Mat loop = imread(path + "LOOP.bmp");
     action = {walk, jump, pick, loop};
+
+    ct_.start();
 }
 
 Mission::~Mission() {
@@ -40,27 +43,30 @@ void Mission::clearCommands() {
     }
 }
 
-void Mission::commandRecognize(const cv::Mat &in) {
+std::string Mission::commandRecognize(const cv::Mat &in) {
     //step1
     Mat step3, step4;
     Mat out;
-
+    ct_.restart();
     bgr2hsv(in, out, HSV_GREEN, false);
-
+    PRINT("hsv cost %d ms\n", ct_.restart());
     //step2
     Mat result = out.clone();
     std::vector<std::vector<cv::Point>> contours;
     std::vector<cv::Vec4i> hierarchy;
     findContours(result, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+
+    Size rect_size;
+
     for (int i = 0; i < contours.size(); i++) {
         std::vector<cv::Point> contour = contours[i];
-        if (contour.size() < 20) continue;
+        if (contour.size() < 30) continue;
         RotatedRect rect = cv::minAreaRect(contour);
         // matrices we'll use
         Mat M, rotated, cropped;
         // get angle and size from the bounding box
         float angle = rect.angle;
-        Size rect_size = rect.size;
+        rect_size = rect.size;
         // thanks to http://felix.abecassis.me/2011/10/opencv-rotation-deskewing/
         if (rect.angle < -45.) {
             angle += 90.0;
@@ -86,7 +92,41 @@ void Mission::commandRecognize(const cv::Mat &in) {
         //exception
         if (rotated.empty() || x < 0 || y < 0 || width < 0 || height < 0) continue;
         step4 = rotated(Rect(x, y, width, height));
-
+    }
+    PRINT("step2 %d ms\n", ct_.restart());
+    clearCommands();
+    //step3 截取两个凹槽的图像
+    cv::Mat part1, part2;
+    part1 = step3(cv::Rect(step3.cols * 0.08, step3.rows * 0.66, step3.cols * 0.18, step3.rows * 0.18));
+    part2 = step3(cv::Rect(step3.cols * 0.74, step3.rows * 0.66, step3.cols * 0.18, step3.rows * 0.18));
+    if (part1.empty() || part2.empty())
+        return "null";
+    cvtColor(part1, part1, COLOR_BGR2GRAY);
+    cvtColor(part2, part2, COLOR_BGR2GRAY);
+    cv::threshold(part1, part1, 80, 256, THRESH_BINARY);
+    cv::threshold(part2, part2, 80, 256, THRESH_BINARY);
+    //cv::imshow("part1", part1);
+    //cv::imshow("part2", part2);
+    //waitKey(0);
+    MatND hist1, hist2;
+    int channels[] = {0};
+    int histSize = 1;
+    float range[] = {0, 128};
+    const float *histRanges = {range};
+    calcHist(&part1, 1, channels, Mat(), // do not use mask
+             hist1, 1, &histSize, &histRanges,
+             true, // the histogram is uniform
+             false);
+    calcHist(&part2, 1, channels, Mat(), // do not use mask
+             hist2, 1, &histSize, &histRanges,
+             true, // the histogram is uniform
+             false);
+    //std::cout << "M1 = " << " " << hist1.reshape(0, 1) << std::endl << std::endl;
+    //std::cout << "M2 = " << " " << hist2.reshape(0, 1) << std::endl << std::endl;
+    //std::cout << compareHist(hist1, hist2, CV_COMP_INTERSECT) << std::endl;
+    PRINT("step3 %d ms\n", ct_.restart());
+    if (compareHist(hist1, hist2, CV_COMP_INTERSECT) > 0 && status_ == 0) {
+        ct_.restart();
         int ii = 0;
         double best;
         temps_.clear();
@@ -107,37 +147,7 @@ void Mission::commandRecognize(const cv::Mat &in) {
             ii++;
 
         } while (0.08 > best);
-    }
-    //step3 截取两个凹槽的图像
-    cv::Mat part1, part2;
-    part1 = step3(cv::Rect(step3.cols * 0.05, step3.rows * 0.66, step3.cols * 0.25, step3.rows * 0.2));
-    part2 = step3(cv::Rect(step3.cols * 0.7, step3.rows * 0.66, step3.cols * 0.25, step3.rows * 0.2));
-    if (part1.empty() || part2.empty())
-        return;
-    cvtColor(part1, part1, COLOR_BGR2GRAY);
-    cvtColor(part2, part2, COLOR_BGR2GRAY);
-    cv::threshold(part1, part1, 50, 256, THRESH_BINARY_INV);
-    cv::threshold(part2, part2, 50, 256, THRESH_BINARY_INV);
-    //cv::imshow("part1", part1);
-    //cv::imshow("part2", part2);
-    //waitKey(0);
-    MatND hist1, hist2;
-    int channels[] = {0};
-    int histSize = 1;
-    float range[] = {255, 256};
-    const float *histRanges = {range};
-    calcHist(&part1, 1, channels, Mat(), // do not use mask
-             hist1, 1, &histSize, &histRanges,
-             true, // the histogram is uniform
-             false);
-    calcHist(&part2, 1, channels, Mat(), // do not use mask
-             hist2, 1, &histSize, &histRanges,
-             true, // the histogram is uniform
-             false);
-    //cout << "M1 = " << " " << hist1.reshape(0, 1) << endl << endl;
-    //cout << "M2 = " << " " << hist2.reshape(0, 1) << endl << endl;
-    //std::cout << compareHist(hist1, hist2, CV_COMP_INTERSECT) << std::endl;
-    if (compareHist(hist1, hist2, CV_COMP_INTERSECT) > 50 && status_ == 0) {
+
         //PRINT("PLAY");
         status_ = 1;
         // step4
@@ -202,9 +212,10 @@ void Mission::commandRecognize(const cv::Mat &in) {
             Command command(action1, direction1, repeat1);
             addCommand(command);
         }
-        std::cout << exec(false) << std::endl;
-        clearCommands();
-    } else if (compareHist(hist1, hist2, CV_COMP_INTERSECT) < 10) {
+        PRINT("step4 %d ms\n", ct_.restart());
+        // std::cout << exec(false) << std::endl;
+    } else if (compareHist(hist1, hist2, CV_COMP_INTERSECT) == 0) {
         status_ = 0;
     }
+    return exec(false);
 }
