@@ -26,8 +26,8 @@ int main(int, char **) {
         cerr << "ERROR! Unable to open camera\n";
         return -1;
     }
-    cap.set(CV_CAP_PROP_FRAME_HEIGHT, 240);
-    cap.set(CV_CAP_PROP_FRAME_WIDTH, 320);
+    cap.set(CV_CAP_PROP_FRAME_HEIGHT, 120);
+    cap.set(CV_CAP_PROP_FRAME_WIDTH, 160);
     //--- GRAB AND WRITE LOOP
     cout << "Start grabbing" << endl
          << "Press any key to terminate" << endl;

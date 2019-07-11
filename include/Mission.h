@@ -159,6 +159,7 @@ private:
         auto smallest = std::min_element(std::begin(v), std::end(v));
         return *smallest;
     }
+
 };
 
 #endif //_MISSION_H

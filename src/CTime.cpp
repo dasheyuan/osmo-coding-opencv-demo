@@ -28,3 +28,11 @@ int CTime::restart() {
     start_ = std::chrono::high_resolution_clock::now();
     return cost;
 }
+
+long CTime::restart2() {
+    end_ = std::chrono::high_resolution_clock::now();
+    auto cost = (long) std::chrono::duration_cast<std::chrono::microseconds>(
+            end_ - start_).count();
+    start_ = std::chrono::high_resolution_clock::now();
+    return cost;
+}

@@ -25,8 +25,6 @@ Mission::Mission() {
     Mat pick = imread(path + "PICK.bmp");
     Mat loop = imread(path + "LOOP.bmp");
     action = {walk, jump, pick, loop};
-
-    ct_.start();
 }
 
 Mission::~Mission() {
@@ -47,17 +45,13 @@ std::string Mission::commandRecognize(const cv::Mat &in) {
     //step1
     Mat step3, step4;
     Mat out;
-    ct_.restart();
     bgr2hsv(in, out, HSV_GREEN, false);
-    PRINT("hsv cost %d ms\n", ct_.restart());
     //step2
     Mat result = out.clone();
     std::vector<std::vector<cv::Point>> contours;
     std::vector<cv::Vec4i> hierarchy;
     findContours(result, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
-
     Size rect_size;
-
     for (int i = 0; i < contours.size(); i++) {
         std::vector<cv::Point> contour = contours[i];
         if (contour.size() < 30) continue;
@@ -93,9 +87,9 @@ std::string Mission::commandRecognize(const cv::Mat &in) {
         if (rotated.empty() || x < 0 || y < 0 || width < 0 || height < 0) continue;
         step4 = rotated(Rect(x, y, width, height));
     }
-    PRINT("step2 %d ms\n", ct_.restart());
+    PRINT("crop cost %ld us\n", ct_.restart2());
     clearCommands();
-    //step3 截取两个凹槽的图像
+    //step3 截取两个凹槽标识图像
     cv::Mat part1, part2;
     part1 = step3(cv::Rect(step3.cols * 0.08, step3.rows * 0.66, step3.cols * 0.18, step3.rows * 0.18));
     part2 = step3(cv::Rect(step3.cols * 0.74, step3.rows * 0.66, step3.cols * 0.18, step3.rows * 0.18));
@@ -108,6 +102,7 @@ std::string Mission::commandRecognize(const cv::Mat &in) {
     //cv::imshow("part1", part1);
     //cv::imshow("part2", part2);
     //waitKey(0);
+    //计算两个标识的灰度直方图，统计的灰度范围为[0,127]
     MatND hist1, hist2;
     int channels[] = {0};
     int histSize = 1;
@@ -124,14 +119,13 @@ std::string Mission::commandRecognize(const cv::Mat &in) {
     //std::cout << "M1 = " << " " << hist1.reshape(0, 1) << std::endl << std::endl;
     //std::cout << "M2 = " << " " << hist2.reshape(0, 1) << std::endl << std::endl;
     //std::cout << compareHist(hist1, hist2, CV_COMP_INTERSECT) << std::endl;
-    PRINT("step3 %d ms\n", ct_.restart());
+    //通过比较两直方图的交叉运算∑min(H1(i), H2(i)),判断是否按下按钮。注意，改变输入图像大小时会改变运算的值。
     if (compareHist(hist1, hist2, CV_COMP_INTERSECT) > 0 && status_ == 0) {
-        ct_.restart();
+        status_ = 1;
         int ii = 0;
         double best;
         temps_.clear();
         do {
-
             Mat step4_1 = step4.clone();
             //exception
             if (rect_size.height * ii + rect_size.height * 1.2 > step4_1.rows) break;
@@ -145,12 +139,7 @@ std::string Mission::commandRecognize(const cv::Mat &in) {
             if (0.08 > best)
                 temps_.push_back(temp);
             ii++;
-
         } while (0.08 > best);
-
-        //PRINT("PLAY");
-        status_ = 1;
-        // step4
         for (cv::Mat temp : temps_) {
             std::string a, d, n;
             Action action1;
@@ -212,8 +201,6 @@ std::string Mission::commandRecognize(const cv::Mat &in) {
             Command command(action1, direction1, repeat1);
             addCommand(command);
         }
-        PRINT("step4 %d ms\n", ct_.restart());
-        // std::cout << exec(false) << std::endl;
     } else if (compareHist(hist1, hist2, CV_COMP_INTERSECT) == 0) {
         status_ = 0;
     }
